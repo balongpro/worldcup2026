@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Cup 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; }
+        .tab-btn.active { background-color: #047857; color: white; border-color: #047857; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- Header -->
+    <header class="bg-emerald-900 text-white p-4 shadow-lg sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-2xl font-bold flex items-center gap-2">
+                🏆 PREDICTION CUP 2026
+            </h1>
+            <div id="clock-status" class="px-4 py-1 rounded-full text-sm font-semibold bg-emerald-800 border border-emerald-600">
+                Đang tải hệ thống...
+            </div>
+            <div class="flex gap-2 bg-emerald-950 p-1 rounded-lg">
+                <button onclick="switchTab('leaderboard')" id="btn-leaderboard" class="tab-btn active px-4 py-2 rounded-md text-emerald-100 hover:bg-emerald-800 transition">Bảng Xếp Hạng</button>
+                <button onclick="switchTab('vote')" id="btn-vote" class="tab-btn px-4 py-2 rounded-md text-emerald-100 hover:bg-emerald-800 transition">Nhập Dự Đoán</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto p-4 mt-6">
+        
+        <!-- LOADING SPINNER -->
+        <div id="loader" class="text-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-700 mx-auto"></div>
+            <p class="mt-4 text-emerald-700 font-medium">Đang đồng bộ dữ liệu từ hệ thống...</p>
+        </div>
+
+        <!-- TAB 1: BẢNG XẾP HẠNG -->
+        <section id="tab-leaderboard" class="hidden">
+            <div class="glass-panel rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-6 bg-white border-b border-slate-200">
+                    <h2 class="text-xl font-bold text-emerald-900">Bảng Điểm Xếp Hạng</h2>
+                    <p class="text-sm text-slate-500 mt-1">Xếp hạng tự động dựa trên số trận dự đoán đúng tỷ số hoàn toàn (1 điểm/trận).</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-sm uppercase">
+                                <th class="p-4 font-semibold">Hạng</th>
+                                <th class="p-4 font-semibold">Kỳ phùng địch thủ</th>
+                                <th class="p-4 font-semibold text-center">Tổng Điểm</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body" class="divide-y divide-slate-100">
+                            <!-- JS Render Leaderboard -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: NHẬP DỰ ĐOÁN -->
+        <section id="tab-vote" class="hidden">
+            <div class="glass-panel rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <h2 class="text-xl font-bold text-emerald-900 mb-4">Nhập Dự Đoán Cá Nhân</h2>
+                <div class="flex flex-col md:flex-row gap-4 items-center">
+                    <div class="w-full md:w-1/3">
+                        <label class="block text-sm font-semibold text-slate-600 mb-2">1. Chọn tên của bạn</label>
+                        <select id="player-select" onchange="renderMatches()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="">-- Chọn tên người chơi --</option>
+                            <!-- JS Render Players -->
+                        </select>
+                    </div>
+                    <div class="w-full md:w-2/3" id="vote-action-area">
+                        <label class="block text-sm font-semibold text-slate-600 mb-2">2. Lưu kết quả</label>
+                        <button id="btn-submit" onclick="submitPredictions()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3 rounded-lg shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed">
+                            💾 Lưu Toàn Bộ Dự Đoán
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="matches-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- JS Render Matches -->
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- CẤU HÌNH API ---
+        const API_URL = "https://script.google.com/macros/s/AKfycbxISMTnJzid-EerYgHaNCqbOGM87H8xC-d-6eQHSkhgvIYZJBwNMdpBwLsrMs7PZiUO/exec"; // <--- DÁN WEB APP URL CỦA BẠN VÀO ĐÂY
+        
+        let globalData = {};
+        let isVoteOpen = false;
+
+        // Khởi tạo
+        window.onload = () => {
+            checkTime();
+            setInterval(checkTime, 60000); // Check giờ mỗi phút
+            fetchData();
+        };
+
+        // Kiểm tra giờ 13h - 22h
+        function checkTime() {
+            const now = new Date();
+            const hour = now.getHours();
+            isVoteOpen = (hour >= 13 && hour < 22);
+            
+            const statusEl = document.getElementById("clock-status");
+            const btnSubmit = document.getElementById("btn-submit");
+
+            if (isVoteOpen) {
+                statusEl.innerHTML = "🟢 Cổng Vote Đang Mở (Đóng lúc 22:00)";
+                statusEl.className = "px-4 py-1 rounded-full text-sm font-semibold bg-emerald-800 border border-emerald-500 text-emerald-100";
+                if(btnSubmit) btnSubmit.disabled = false;
+            } else {
+                statusEl.innerHTML = "🔴 Cổng Vote Đã Đóng (Mở lại lúc 13:00)";
+                statusEl.className = "px-4 py-1 rounded-full text-sm font-semibold bg-rose-900 border border-rose-600 text-rose-100";
+                if(btnSubmit) btnSubmit.disabled = true;
+            }
+        }
+
+        // Đổi Tab
+        function switchTab(tabId) {
+            document.querySelectorAll('section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${tabId}`).classList.add('active');
+        }
+
+        // Fetch Dữ liệu từ Google Sheet
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL + "?action=getData");
+                globalData = await response.json();
+                
+                document.getElementById('loader').style.display = 'none';
+                renderLeaderboard();
+                renderPlayerSelect();
+                switchTab('leaderboard'); // Mặc định mở tab rank
+            } catch (error) {
+                alert("Lỗi kết nối đến Server. Vui lòng tải lại trang.");
+                console.error(error);
+            }
+        }
+
+        // Render Bảng Xếp Hạng
+        function renderLeaderboard() {
+            const tbody = document.getElementById("leaderboard-body");
+            tbody.innerHTML = "";
+            
+            globalData.leaderboard.forEach((player, index) => {
+                let rankTrophy = index + 1;
+                if(index === 0) rankTrophy = "🥇 1";
+                if(index === 1) rankTrophy = "🥈 2";
+                if(index === 2) rankTrophy = "🥉 3";
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-emerald-50 transition">
+                        <td class="p-4 font-bold text-slate-700">${rankTrophy}</td>
+                        <td class="p-4 font-semibold text-emerald-800 text-lg">${player.name}</td>
+                        <td class="p-4 text-center font-bold text-emerald-600 text-xl">${player.points} <span class="text-sm font-normal text-slate-500">trận</span></td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Render Dropdown Tên
+        function renderPlayerSelect() {
+            const select = document.getElementById("player-select");
+            globalData.players.forEach(name => {
+                select.innerHTML += `<option value="${name}">${name}</option>`;
+            });
+        }
+
+        // Render Danh sách trận khi chọn tên
+        function renderMatches() {
+            const container = document.getElementById("matches-container");
+            const selectedPlayer = document.getElementById("player-select").value;
+            container.innerHTML = "";
+
+            if (!selectedPlayer) return;
+
+            globalData.matches.forEach(match => {
+                const isPlayed = match.actualScore !== "";
+                const userVote = match.votes[selectedPlayer] || "";
+                
+                // Tách tỷ số user vote để đổ vào input (nếu có)
+                let vHome = "", vAway = "";
+                if(userVote.includes("-")) {
+                    [vHome, vAway] = userVote.split("-");
+                }
+
+                // Vô hiệu hóa input nếu trận đã đá hoặc ngoài giờ
+                const inputDisabled = isPlayed || !isVoteOpen ? "disabled" : "";
+                const opacityClass = isPlayed ? "opacity-60" : "";
+
+                container.innerHTML += `
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between ${opacityClass}">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-3 mb-3">
+                            <span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">${match.round}</span>
+                            <span class="text-xs text-slate-400 font-medium">${match.date.substring(0,10)} | ${match.time}</span>
+                        </div>
+                        
+                        <div class="text-center mb-4">
+                            <h3 class="font-bold text-slate-800 text-lg">${match.name.replace(' vs ', ' <span class="text-slate-400 font-normal mx-2">vs</span> ')}</h3>
+                        </div>
+
+                        <div class="flex justify-between items-end mt-auto">
+                            <div class="bg-slate-50 p-2 rounded w-1/3 text-center border border-slate-100">
+                                <p class="text-[10px] uppercase text-slate-500 font-bold mb-1">Thực tế</p>
+                                <p class="font-bold text-lg text-slate-800">${isPlayed ? match.actualScore : "--"}</p>
+                            </div>
+
+                            <div class="w-1/2 flex items-center justify-center gap-2">
+                                <input type="number" min="0" max="20" id="home-${match.row}" value="${vHome}" ${inputDisabled} class="w-12 h-10 text-center font-bold text-lg border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:bg-slate-100" placeholder="-">
+                                <span class="font-bold text-slate-400">-</span>
+                                <input type="number" min="0" max="20" id="away-${match.row}" value="${vAway}" ${inputDisabled} class="w-12 h-10 text-center font-bold text-lg border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:bg-slate-100" placeholder="-">
+                            </div>
+                        </div>
+                        ${userVote !== "" && !isPlayed ? `<p class="text-center text-xs text-emerald-600 mt-3 font-medium">✓ Bạn đã dự đoán: ${userVote}</p>` : ''}
+                    </div>
+                `;
+            });
+        }
+
+        // Submit Lên Server
+        async function submitPredictions() {
+            const selectedPlayer = document.getElementById("player-select").value;
+            if (!selectedPlayer) return alert("Vui lòng chọn tên của bạn trước!");
+            if (!isVoteOpen) return alert("Hiện không trong khung giờ dự đoán (13h-22h)!");
+
+            let votes = {};
+            globalData.matches.forEach(match => {
+                const isPlayed = match.actualScore !== "";
+                if (!isPlayed) {
+                    const home = document.getElementById(`home-${match.row}`).value;
+                    const away = document.getElementById(`away-${match.row}`).value;
+                    if (home !== "" && away !== "") {
+                        votes[match.row] = `${home}-${away}`;
+                    }
+                }
+            });
+
+            if (Object.keys(votes).length === 0) return alert("Bạn chưa nhập hoặc thay đổi dự đoán nào!");
+
+            const btnSubmit = document.getElementById("btn-submit");
+            btnSubmit.innerHTML = "⏳ Đang lưu...";
+            btnSubmit.disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Dùng text/plain để vượt qua CORS
+                    body: JSON.stringify({
+                        action: 'submitVotes',
+                        playerName: selectedPlayer,
+                        votes: votes
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert("Lưu dự đoán thành công!");
+                    fetchData(); // Reload data
+                } else {
+                    alert("Lỗi: " + result.message);
+                }
+            } catch (error) {
+                alert("Đã xảy ra lỗi khi lưu kết quả.");
+                console.error(error);
+            } finally {
+                btnSubmit.innerHTML = "💾 Lưu Toàn Bộ Dự Đoán";
+                btnSubmit.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
