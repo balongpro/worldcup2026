@@ -104,7 +104,7 @@
             fetchData();
         };
 
-        // Kiểm tra giờ 13h - 22h
+        // Kiểm tra giờ 13h - 23h
         function checkTime() {
             const now = new Date();
             const hour = now.getHours();
@@ -233,7 +233,7 @@
         async function submitPredictions() {
             const selectedPlayer = document.getElementById("player-select").value;
             if (!selectedPlayer) return alert("Vui lòng chọn tên của bạn trước!");
-            if (!isVoteOpen) return alert("Hiện không trong khung giờ dự đoán (13h-22h)!");
+            if (!isVoteOpen) return alert("Hiện không trong khung giờ dự đoán (13h-23h)!");
 
             let votes = {};
             globalData.matches.forEach(match => {
